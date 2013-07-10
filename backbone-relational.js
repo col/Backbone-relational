@@ -609,10 +609,10 @@
 				return false;
 			}
 			// Check if this is not a HasMany, and the reverse relation is HasMany as well
-			if ( this instanceof Backbone.HasMany && this.reverseRelation.type === Backbone.HasMany ) {
-				warn && console.warn( 'Relation=%o: relation is a HasMany, and the reverseRelation is HasMany as well.', this );
-				return false;
-			}
+//			if ( this instanceof Backbone.HasMany && this.reverseRelation.type === Backbone.HasMany ) {
+//				warn && console.warn( 'Relation=%o: relation is a HasMany, and the reverseRelation is HasMany as well.', this );
+//				return false;
+//			}
 			// Check if we're not attempting to create a relationship on a `key` that's already used.
 			if ( i && _.keys( i._relations ).length ) {
 				var existing = _.find( i._relations, function( rel ) {
@@ -1067,6 +1067,22 @@
 			}
 		}
 	});
+
+//    Backbone.HasMany.extend = Backbone.Relation.extend
+//
+//    Backbone.HasManyToMany = Backbone.HasMany.extend({
+//        collectionType: null,
+//
+//        options: {
+//            reverseRelation: {
+//                type: 'HasManyToMany'
+//            },
+//            collectionType: Backbone.Collection,
+//            collectionKey: true,
+//            collectionOptions: {}
+//        }
+//    });
+
 
 	/**
 	 * A type of Backbone.Model that also maintains relations to other models and collections.

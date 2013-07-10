@@ -356,6 +356,50 @@ $(document).ready(function() {
 		}
 	});
 
+
+    /**
+     * Article/Tag
+     */
+
+    window.Article = Backbone.RelationalModel.extend({
+        urlRoot: '/articles/',
+
+        relations: [
+            {
+                type: Backbone.HasMany,
+                key: 'tags',
+                relatedModel: 'Tag',
+                reverseRelation: {
+                    key: 'articles',
+                    type: Backbone.HasMany,
+                    includeInJSON: false
+                }
+            },
+            {
+                type: Backbone.HasMany,
+                key: 'relatedArticles',
+                relatedModel: 'Article',
+                reverseRelation: {
+                    key: 'relatedArticles',
+                    type: Backbone.HasMany,
+                    includeInJSON: false
+                }
+            }],
+
+        toString: function() {
+            return 'Article (' + this.id + ')';
+        }
+    });
+
+    window.Tag = Backbone.RelationalModel.extend({
+        urlRoot: '/tags/',
+
+        toString: function() {
+            return 'Tag (' + this.id + ')';
+        }
+    });
+
+
 	/**
 	 * Reset variables that are persistent across tests, specifically `window.requests` and the state of
 	 * `Backbone.Relational.store`.
@@ -424,6 +468,10 @@ $(document).ready(function() {
 			occupants: [],
 			resource_uri: 'house-2'
 		});
+
+        window.article1 = new Article({title: 'First Post!'});
+
+        window.tag1 = new Tag({name: 'Backbone.js'});
 	}
 
 	module ( "General / Backbone", { setup: reset } );
@@ -2046,29 +2094,29 @@ $(document).ready(function() {
 			view = new View();
 			ok( _.size( view._relations ) === 1 );
 		});
-		
-		test( "HasMany with a reverseRelation HasMany is not allowed", function() {
-			var User = Backbone.RelationalModel.extend({});
-			var Password = Backbone.RelationalModel.extend({
-				relations: [{
-					type: 'HasMany',
-					key: 'users',
-					relatedModel: User,
-					reverseRelation: {
-						type: 'HasMany',
-						key: 'passwords'
-					}
-				}]
-			});
-			
-			var password = new Password({
-				plaintext: 'qwerty',
-				users: [ 'person-1', 'person-2', 'person-3' ]
-			});
-			
-			ok( _.size( password._relations ) === 0, "No _relations created on Password" );
-		});
-		
+
+//		test( "HasMany with a reverseRelation HasMany is not allowed", function() {
+//			var User = Backbone.RelationalModel.extend({});
+//			var Password = Backbone.RelationalModel.extend({
+//				relations: [{
+//					type: 'HasMany',
+//					key: 'users',
+//					relatedModel: User,
+//					reverseRelation: {
+//						type: 'HasMany',
+//						key: 'passwords'
+//					}
+//				}]
+//			});
+//
+//			var password = new Password({
+//				plaintext: 'qwerty',
+//				users: [ 'person-1', 'person-2', 'person-3' ]
+//			});
+//
+//			ok( _.size( password._relations ) === 0, "No _relations created on Password" );
+//		});
+
 		test( "Duplicate relations not allowed (two simple relations)", function() {
 			var Properties = Backbone.RelationalModel.extend({});
 			var View = Backbone.RelationalModel.extend({
@@ -3072,17 +3120,27 @@ $(document).ready(function() {
 		test( "Add and remove", function() {
 			equal( ourHouse.get( 'occupants' ).length, 1, "ourHouse has 1 occupant" );
 			equal( person1.get( 'livesIn' ), null, "Person 1 doesn't live anywhere" );
-			
+            equal( article1.get( 'tags' ).length, 0, "Article has no tags" );
+            equal( tag1.get( 'articles' ).length, 0, "Tag has no articles" );
+
+            // Test: One to many
 			ourHouse.get( 'occupants' ).add( person1 );
 			
 			equal( ourHouse.get( 'occupants' ).length, 2, "Our House has 2 occupants" );
 			equal( person1.get( 'livesIn' ) && person1.get('livesIn').id, ourHouse.id, "Person 1 lives in ourHouse" );
-			
+
+            // One to one
 			person1.set( { 'livesIn': theirHouse } );
 			
 			equal( theirHouse.get( 'occupants' ).length, 1, "theirHouse has 1 occupant" );
 			equal( ourHouse.get( 'occupants' ).length, 1, "ourHouse has 1 occupant" );
 			equal( person1.get( 'livesIn' ) && person1.get('livesIn').id, theirHouse.id, "Person 1 lives in theirHouse" );
+
+            // Many to many
+            article1.get('tags').add( tag1 );
+
+            equal( article1.get( 'tags' ).length, 1, "Article has 1 tag" );
+            equal( tag1.get( 'articles' ).length, 1, "Tag has 1 article" );
 		});
 
 		test( "Destroy removes models from reverse relations", function() {
@@ -3109,6 +3167,32 @@ $(document).ready(function() {
 
 			ok( zoo.get( 'animals' ).length === 0 );
 			ok( !baboon.get( 'zoo' ) );
+
+            // Many to many
+            var article = new Article({ title: 'FooBar', tags: [ 1, 2, 3 ] })
+
+            var fooTag = new Tag({id: 1, name: 'Foo'});
+            var barTag = new Tag({id: 2, name: 'Bar'});
+            var wuTag = new Tag({id: 3, name: 'Wu'});
+
+            ok( article.get( 'tags' ).length === 3 );
+
+            fooTag.destroy();
+
+            ok( article.get( 'tags' ).length === 2 );
+            ok( article.get( 'tags' ).get( barTag ) === barTag );
+            ok( fooTag.get( 'articles' ).length === 0 );
+
+            article.get( 'tags' ).remove( barTag );
+
+            ok( article.get( 'tags' ).length === 1 );
+            ok( barTag.get( 'articles' ).length === 0 );
+
+            article.destroy();
+
+            ok( article.get( 'tags' ).length === 0 );
+            ok( wuTag.get( 'articles').length === 0 );
+
 		});
 		
 		test( "HasOne relations to self (tree stucture)", function() {
@@ -3153,7 +3237,21 @@ $(document).ready(function() {
 			ok( child2.get( 'parent' ) === parent );
 			equal( child2.get( 'children' ).length, 0 );
 		});
-		
+
+        test( "HasMany to HasMany relations to self (tree structure)", function() {
+            var article1 = new Article({ id: '1', title: 'First', relatedArticles: [ '2', '3' ] });
+            var article2 = new Article({ id: '2', title: 'Second' });
+            var article3 = new Article({ id: '3', title: 'Third' });
+
+            equal( article1.get( 'relatedArticles' ).length, 2 );
+            equal( article2.get( 'relatedArticles' ).length, 1 );
+            equal( article3.get( 'relatedArticles' ).length, 1 );
+            ok( article1.get( 'relatedArticles' ).include( article2 ) );
+            ok( article1.get( 'relatedArticles' ).include( article3 ) );
+            ok( article2.get( 'relatedArticles' ).include( article1 ) );
+            ok( article3.get( 'relatedArticles' ).include( article1 ) );
+        });
+
 		test( "HasOne relations to self (cycle, directed graph structure)", function() {
 			var node1 = new Node({ id: '1', parent: '3', name: 'First node' });
 			var node2 = new Node({ id: '2', parent: '1', name: 'Second node' });
@@ -3780,21 +3878,15 @@ $(document).ready(function() {
 				changeEventsTriggered = 0;
 
 			zoo
-//				.on( 'change:animals', function( model, coll ) {
-//					console.log( 'change:animals; args=%o', arguments );
-//				})
 				.on( 'add:animals', function( model, coll ) {
-					//console.log( 'add:animals; args=%o', arguments );
 					addEventsTriggered++;
 				})
 				.on( 'remove:animals', function( model, coll ) {
-					//console.log( 'remove:animals; args=%o', arguments );
 					removeEventsTriggered++;
 				});
 
 			animal
 				.on( 'change:livesIn', function( model, coll ) {
-					//console.log( 'change:livesIn; args=%o', arguments );
 					changeEventsTriggered++;
 				});
 
@@ -3829,6 +3921,58 @@ $(document).ready(function() {
 			ok( removeEventsTriggered === 1 );
 			ok( changeEventsTriggered === 2 );
 		});
+
+        test( "Many to many - `add:` and `remove:` events", function() {
+            var article = new Article({ id: 'article-1' }),
+                tag = new Tag({ id: 'tag-1' });
+
+            var addTagEventsTriggered = 0,
+                removeTagEventsTriggered = 0,
+                addArticleEventsTriggered = 0,
+                removeArticleEventsTriggered = 0;
+
+            article
+                .on( 'add:tags', function( model, coll ) {
+                    addTagEventsTriggered++;
+                })
+                .on( 'remove:tags', function( model, coll ) {
+                    removeTagEventsTriggered++;
+                });
+
+            tag
+                .on( 'add:articles', function( model, coll ) {
+                    addArticleEventsTriggered++;
+                })
+                .on( 'remove:articles', function( model, coll ) {
+                    removeArticleEventsTriggered++;
+                });
+
+            // Should trigger `add:tags` and `add:articles`
+            article.get( 'tags').add( tag );
+
+            ok( addTagEventsTriggered === 1 );
+            ok( removeTagEventsTriggered === 0 );
+            ok( addArticleEventsTriggered === 1 );
+            ok( removeArticleEventsTriggered === 0 );
+
+            addTagEventsTriggered = removeTagEventsTriggered = addArticleEventsTriggered = removeArticleEventsTriggered = 0;
+
+            // Doing this shouldn't trigger any `add`/`remove`/`update` events
+            article.set( 'tags', [ 'tag-1' ] );
+
+            ok( addTagEventsTriggered === 0 );
+            ok( removeTagEventsTriggered === 0 );
+            ok( addArticleEventsTriggered === 0 );
+            ok( removeArticleEventsTriggered === 0 );
+
+            // Should trigger a `remove` on zoo and an `update` on animal
+            article.set( 'tags', [ 'unknwon-tag' ] );
+
+            ok( addTagEventsTriggered === 0 );
+            ok( removeTagEventsTriggered === 1 );
+            ok( addArticleEventsTriggered === 0 );
+            ok( removeArticleEventsTriggered === 1 );
+        });
 
 		test( "`reset` events", function() {
 			var initialize = AnimalCollection.prototype.initialize;
